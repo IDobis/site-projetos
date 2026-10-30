@@ -19,5 +19,10 @@
   },
   "engines": {
     "node": ">=22.13"
+  },
+  "overrides": {
+    "@nestjs/platform-express": {
+      "multer": "2.5.0"
+    }
   }
 }
