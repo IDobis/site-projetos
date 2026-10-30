@@ -66,3 +66,47 @@ export function IconDone() {
     </Stroke>
   );
 }
+
+export function IconMenu() {
+  return (
+    <Stroke>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </Stroke>
+  );
+}
+
+export function IconClose() {
+  return (
+    <Stroke>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </Stroke>
+  );
+}
+
+export function IconPanel() {
+  return (
+    <Stroke>
+      <rect x="4.5" y="4.5" width="15" height="15" rx="2" />
+      <path d="M9.5 4.5v15" />
+    </Stroke>
+  );
+}
+
+export function IconPlus() {
+  return (
+    <Stroke>
+      <path d="M12 6v12M6 12h12" />
+    </Stroke>
+  );
+}
+
+export function IconGrid() {
+  return (
+    <Stroke>
+      <rect x="4" y="4" width="6.5" height="6.5" rx="1.4" />
+      <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.4" />
+      <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.4" />
+      <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.4" />
+    </Stroke>
+  );
+}

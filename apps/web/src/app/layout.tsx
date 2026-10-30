@@ -1,22 +1,20 @@
 import type { Metadata } from 'next';
-import { Fraunces, Source_Sans_3 } from 'next/font/google';
-import { Header } from '@/components/Header';
+import localFont from 'next/font/local';
+import { Suspense } from 'react';
+import { AppShell } from '@/components/AppShell';
 import { SearchHotkey } from '@/components/SearchHotkey';
 import { Toaster } from '@/components/Toaster';
 import { themeBootScript } from '@/lib/theme';
 import './globals.css';
 
-const sans = Source_Sans_3({
-  subsets: ['latin'],
+const satoshi = localFont({
+  src: '../fonts/Satoshi-Variable.woff2',
   display: 'swap',
+  weight: '400 700',
+  style: 'normal',
   variable: '--font-sans',
-  weight: ['400', '500', '600', '700'],
-});
-
-const display = Fraunces({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-display',
+  fallback: ['ui-sans-serif', 'system-ui', 'sans-serif'],
+  adjustFontFallback: 'Arial',
 });
 
 export const metadata: Metadata = {
@@ -26,22 +24,21 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="pt-BR"
-      className={`${sans.variable} ${display.variable}`}
-      suppressHydrationWarning
-    >
+    <html lang="pt-BR" className={satoshi.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
-      <body className="page font-sans antialiased">
+      <body className={`${satoshi.className} page antialiased`}>
         <a className="skip-link" href="#conteudo">
           Ir para o conteúdo
         </a>
-        <Header />
-        <main id="conteudo" tabIndex={-1} className="shell stack pb-16 pt-8 md:pt-12">
-          {children}
-        </main>
+        <Suspense>
+          <AppShell>
+            <main id="conteudo" tabIndex={-1} className="shell stack content-main">
+              {children}
+            </main>
+          </AppShell>
+        </Suspense>
         <Toaster />
         <SearchHotkey />
       </body>
