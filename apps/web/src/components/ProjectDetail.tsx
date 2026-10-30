@@ -1,27 +1,31 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ApiError, deleteProject, getProject } from '@/lib/api';
 import { clearDraft, draftKey } from '@/lib/draft';
 import { formatDate } from '@/lib/labels';
+import { optimisticRemove, revertRemove, useLiveProject } from '@/lib/live';
+import { withViewTransition } from '@/lib/navigate';
 import { Project } from '@/lib/types';
+import { ProjectLink, TagList } from './ProjectBits';
 import { ConfirmDialog } from './ConfirmDialog';
+import { DetailSkeleton, EmptyState, ErrorState } from './States';
 import { StatusBadge } from './StatusBadge';
+import { toast } from './Toaster';
+import { TransitionLink } from './TransitionLink';
 
 export function ProjectDetail({ id }: { id: string }) {
   const router = useRouter();
+  const live = useLiveProject(id);
   const [project, setProject] = useState<Project | null>(null);
   const [kind, setKind] = useState<'loading' | 'ready' | 'error' | 'missing'>('loading');
   const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    if (live?.phase === 'pending') return;
     let cancelled = false;
-    setKind('loading');
     getProject(id)
       .then((data) => {
         if (cancelled) return;
@@ -30,128 +34,122 @@ export function ProjectDetail({ id }: { id: string }) {
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        if (error instanceof ApiError && error.status === 404) setKind('missing');
-        else setKind('error');
+        if (error instanceof ApiError && error.status === 404) {
+          if (!live) setKind('missing');
+          return;
+        }
+        if (!live) setKind('error');
       });
     return () => {
       cancelled = true;
     };
-  }, [id, reloadKey]);
+  }, [id, reloadKey, live]);
+
+  const shown = live?.project ?? project;
 
   async function onDelete() {
-    setDeleting(true);
-    setDeleteError(null);
+    if (!shown) return;
+    const snapshot = shown;
+    setConfirming(false);
+    optimisticRemove(snapshot);
+    toast('Projeto excluído.');
+    withViewTransition(() => router.push('/'));
     try {
       await deleteProject(id);
       clearDraft(draftKey(id));
-      router.push('/');
     } catch {
-      setDeleteError('Não foi possível excluir o projeto.');
-      setDeleting(false);
-      setConfirming(false);
+      revertRemove(id);
+      toast('Não foi possível excluir.');
     }
   }
 
-  if (kind === 'loading') {
+  if (!shown && kind === 'loading') {
     return (
-      <p className="text-sm text-stone-600" role="status">
-        Carregando projeto...
-      </p>
+      <>
+        <p className="sr-only" role="status">
+          Carregando projeto
+        </p>
+        <DetailSkeleton />
+      </>
     );
   }
 
-  if (kind === 'missing') {
+  if (!shown && kind === 'missing') {
     return (
-      <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-10 text-center">
-        <p className="font-medium">Projeto não encontrado.</p>
-        <Link href="/" className="mt-4 inline-flex text-sm text-pine hover:underline">
+      <EmptyState
+        title="Projeto não encontrado"
+        description="Ele não está mais na lista."
+      >
+        <TransitionLink href="/" className="btn btn-ghost">
           Voltar para a lista
-        </Link>
-      </div>
+        </TransitionLink>
+      </EmptyState>
     );
   }
 
-  if (kind === 'error' || !project) {
+  if (!shown) {
     return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-4" role="alert">
-        <p className="text-sm text-red-800">Não foi possível carregar o projeto.</p>
-        <button
-          type="button"
-          onClick={() => setReloadKey((current) => current + 1)}
-          className="mt-3 rounded-full border border-red-300 px-4 py-2 text-sm font-medium text-red-900"
-        >
-          Tentar novamente
-        </button>
-      </div>
+      <ErrorState
+        title="Não foi possível carregar"
+        description="O projeto não chegou. Tente de novo."
+        onRetry={() => setReloadKey((current) => current + 1)}
+      />
     );
   }
 
   return (
     <article>
-      <Link href="/" className="text-sm text-pine hover:underline">
+      <TransitionLink href="/" className="back">
         Voltar
-      </Link>
-      <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <h1 className="font-serif text-4xl tracking-tight">{project.name}</h1>
-        <StatusBadge status={project.status} />
+      </TransitionLink>
+      <div className="title-row">
+        <h1 className="title">{shown.name}</h1>
+        <StatusBadge status={shown.status} />
       </div>
-      <p className="mt-4 max-w-3xl text-base leading-7 text-stone-700">
-        {project.description || 'Sem descrição'}
-      </p>
+      <p className="prose">{shown.description || 'Sem descrição'}</p>
 
-      <dl className="mt-6 grid gap-4 rounded-2xl border border-stone-200 bg-white p-4 shadow-card sm:grid-cols-2 sm:p-6">
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-stone-500">Link</dt>
-          <dd className="mt-1 text-sm">
-            {project.url ? (
-              <a
-                href={project.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-pine hover:underline"
-              >
-                {project.url}
-              </a>
-            ) : (
-              'Sem link'
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-stone-500">Tags</dt>
-          <dd className="mt-1 text-sm">
-            {project.tags.length > 0 ? project.tags.join(', ') : 'Sem tags'}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-stone-500">Criado em</dt>
-          <dd className="mt-1 text-sm">{formatDate(project.createdAt)}</dd>
-        </div>
-        <div>
-          <dt className="text-xs uppercase tracking-wide text-stone-500">
-            Atualizado em
-          </dt>
-          <dd className="mt-1 text-sm">{formatDate(project.updatedAt)}</dd>
-        </div>
-      </dl>
+      <div className="card meta-wrap">
+        <dl className="meta">
+          <div>
+            <dt>Link</dt>
+            <dd>
+              <ProjectLink url={shown.url} />
+            </dd>
+          </div>
+          <div>
+            <dt>Tags</dt>
+            <dd>
+              <TagList tags={shown.tags} />
+            </dd>
+          </div>
+          <div>
+            <dt>Criado em</dt>
+            <dd>
+              <time className="num" dateTime={shown.createdAt}>
+                {formatDate(shown.createdAt)}
+              </time>
+            </dd>
+          </div>
+          <div>
+            <dt>Atualizado em</dt>
+            <dd>
+              <time className="num" dateTime={shown.updatedAt}>
+                {formatDate(shown.updatedAt)}
+              </time>
+            </dd>
+          </div>
+        </dl>
+      </div>
 
-      {deleteError ? (
-        <p className="mt-4 text-sm text-red-700" role="alert">
-          {deleteError}
-        </p>
-      ) : null}
-
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-        <Link
-          href={`/projects/${project.id}/edit`}
-          className="rounded-full bg-pine px-4 py-2 text-center text-sm font-medium text-white hover:bg-teal-800"
-        >
+      <div className="actions inline start">
+        <TransitionLink href={`/projects/${shown.id}/edit`} className="btn btn-primary">
           Editar
-        </Link>
+        </TransitionLink>
         <button
           type="button"
+          className="btn btn-danger"
+          aria-haspopup="dialog"
           onClick={() => setConfirming(true)}
-          className="rounded-full border border-red-300 px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-50"
         >
           Excluir
         </button>
@@ -160,9 +158,8 @@ export function ProjectDetail({ id }: { id: string }) {
       {confirming ? (
         <ConfirmDialog
           title="Excluir projeto?"
-          description={`O projeto "${project.name}" será removido. Essa ação não pode ser desfeita.`}
+          description={`O projeto ${shown.name} será removido. Essa ação não tem volta.`}
           confirmLabel="Excluir"
-          pending={deleting}
           onCancel={() => setConfirming(false)}
           onConfirm={onDelete}
         />

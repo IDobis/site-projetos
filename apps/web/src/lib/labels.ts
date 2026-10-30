@@ -7,9 +7,11 @@ export const STATUS_LABELS: Record<ProjectStatus, string> = {
   done: 'Concluído',
 };
 
-export function formatDate(value: string): string {
+export function formatDate(value: string, style: 'short' | 'medium' = 'medium'): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'medium',
+    dateStyle: style,
     timeStyle: 'short',
-  }).format(new Date(value));
+  }).format(date);
 }

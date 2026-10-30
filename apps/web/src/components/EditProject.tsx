@@ -1,20 +1,22 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ApiError, getProject } from '@/lib/api';
+import { useLiveProject } from '@/lib/live';
 import { formatTags } from '@/lib/tags';
 import { Project } from '@/lib/types';
 import { ProjectForm } from './ProjectForm';
+import { EmptyState, ErrorState, FormSkeleton } from './States';
+import { TransitionLink } from './TransitionLink';
 
 export function EditProject({ id }: { id: string }) {
+  const live = useLiveProject(id);
   const [project, setProject] = useState<Project | null>(null);
   const [kind, setKind] = useState<'loading' | 'ready' | 'error' | 'missing'>('loading');
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setKind('loading');
     getProject(id)
       .then((data) => {
         if (cancelled) return;
@@ -31,50 +33,52 @@ export function EditProject({ id }: { id: string }) {
     };
   }, [id, reloadKey]);
 
-  if (kind === 'loading') {
-    return (
-      <p className="text-sm text-stone-600" role="status">
-        Carregando projeto...
-      </p>
-    );
-  }
+  const shown = live?.project ?? project;
 
   if (kind === 'missing') {
     return (
-      <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-10 text-center">
-        <p className="font-medium">Projeto não encontrado.</p>
-        <Link href="/" className="mt-4 inline-flex text-sm text-pine hover:underline">
+      <EmptyState
+        title="Projeto não encontrado"
+        description="Ele não está mais na lista."
+      >
+        <TransitionLink href="/" className="btn btn-ghost">
           Voltar para a lista
-        </Link>
-      </div>
+        </TransitionLink>
+      </EmptyState>
     );
   }
 
-  if (kind === 'error' || !project) {
+  if (!shown && kind === 'error') {
     return (
-      <div className="rounded-2xl border border-red-200 bg-red-50 p-4" role="alert">
-        <p className="text-sm text-red-800">Não foi possível carregar o projeto.</p>
-        <button
-          type="button"
-          onClick={() => setReloadKey((current) => current + 1)}
-          className="mt-3 rounded-full border border-red-300 px-4 py-2 text-sm font-medium text-red-900"
-        >
-          Tentar novamente
-        </button>
-      </div>
+      <ErrorState
+        title="Não foi possível carregar"
+        description="O projeto não chegou. Tente de novo."
+        onRetry={() => setReloadKey((current) => current + 1)}
+      />
+    );
+  }
+
+  if (!shown) {
+    return (
+      <>
+        <p className="sr-only" role="status">
+          Carregando projeto
+        </p>
+        <FormSkeleton />
+      </>
     );
   }
 
   return (
     <ProjectForm
       mode="edit"
-      projectId={project.id}
+      project={shown}
       initial={{
-        name: project.name,
-        description: project.description ?? '',
-        url: project.url ?? '',
-        status: project.status,
-        tags: formatTags(project.tags),
+        name: shown.name,
+        description: shown.description ?? '',
+        url: shown.url ?? '',
+        status: shown.status,
+        tags: formatTags(shown.tags),
       }}
     />
   );
