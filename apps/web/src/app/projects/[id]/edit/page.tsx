@@ -1,4 +1,9 @@
+import type { Metadata } from 'next';
 import { EditProject } from '@/components/EditProject';
+
+export const metadata: Metadata = {
+  title: 'Editar projeto',
+};
 
 export default async function EditProjectPage({
   params,

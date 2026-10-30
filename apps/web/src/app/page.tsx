@@ -1,16 +1,17 @@
 import { Suspense } from 'react';
+import { ListHeading } from '@/components/ListHeading';
+import { Metrics } from '@/components/Metrics';
 import { ProjectList } from '@/components/ProjectList';
+import { ListSkeleton } from '@/components/States';
 
 export default function HomePage() {
   return (
-    <Suspense
-      fallback={
-        <p className="text-sm text-stone-600" role="status">
-          Carregando projetos...
-        </p>
-      }
-    >
-      <ProjectList />
-    </Suspense>
+    <section>
+      <Suspense fallback={<ListSkeleton />}>
+        <ListHeading />
+        <Metrics />
+        <ProjectList />
+      </Suspense>
+    </section>
   );
 }

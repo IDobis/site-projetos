@@ -1,108 +1,157 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSyncExternalStore } from 'react';
 import { FormEvent, useEffect, useState } from 'react';
 import { listProjects } from '@/lib/api';
-import { STATUS_LABELS } from '@/lib/labels';
+import { formatDate, STATUS_LABELS } from '@/lib/labels';
+import { applyLive, reconcileLive, useLiveVersion } from '@/lib/live';
 import { PROJECT_STATUSES, Project, ProjectList as ProjectPage } from '@/lib/types';
+import { ProjectLink, TagList } from './ProjectBits';
+import { EmptyState, ErrorState, ListSkeleton } from './States';
 import { StatusBadge } from './StatusBadge';
+import { TransitionLink } from './TransitionLink';
 
 const PAGE_SIZE = 20;
+
+type Memory = { key: string; data: ProjectPage };
+let memory: Memory | null = null;
+const memoryListeners = new Set<() => void>();
+
+function rememberList(key: string, data: ProjectPage) {
+  memory = { key, data };
+  memoryListeners.forEach((listener) => listener());
+}
+
+function subscribeMemory(listener: () => void) {
+  memoryListeners.add(listener);
+  return () => memoryListeners.delete(listener);
+}
 
 export function ProjectList() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const q = searchParams.get('q') ?? '';
   const status = searchParams.get('status') ?? '';
+  const tag = searchParams.get('tag') ?? '';
   const page = positivePage(searchParams.get('page'));
+  const cacheKey = `${q}\n${status}\n${tag}\n${page}`;
   const [qInput, setQInput] = useState(q);
+  const [trackedQ, setTrackedQ] = useState(q);
+  if (q !== trackedQ) {
+    setTrackedQ(q);
+    setQInput(q);
+  }
   const [reloadKey, setReloadKey] = useState(0);
-  const [state, setState] = useState<
-    { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; data: ProjectPage }
-  >({ kind: 'loading' });
+  const [error, setError] = useState(false);
+  const [errorKey, setErrorKey] = useState(cacheKey);
+  if (errorKey !== cacheKey) {
+    setErrorKey(cacheKey);
+    setError(false);
+  }
+  const data = useSyncExternalStore(
+    subscribeMemory,
+    () => (memory?.key === cacheKey ? memory.data : null),
+    () => null,
+  );
+  const liveVersion = useLiveVersion();
 
   useEffect(() => {
-    setQInput(q);
-  }, [q]);
+    if (window.location.hash !== '#busca') return;
+    document.getElementById('q')?.focus();
+  }, []);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       if (qInput.trim() === q.trim()) return;
-      replaceQuery(router, { q: qInput, status, page: 1 });
+      replaceQuery(router, { q: qInput, status, tag, page: 1 });
     }, 300);
     return () => window.clearTimeout(timeout);
-  }, [qInput, q, status, router]);
+  }, [qInput, q, status, tag, router]);
 
   useEffect(() => {
     let cancelled = false;
-    setState({ kind: 'loading' });
     listProjects({
       q,
+      tag: tag || undefined,
       status: status || undefined,
       page,
       pageSize: PAGE_SIZE,
     })
-      .then((data) => {
-        if (!cancelled) setState({ kind: 'ready', data });
+      .then((result) => {
+        if (cancelled) return;
+        rememberList(cacheKey, result);
       })
       .catch(() => {
-        if (!cancelled) setState({ kind: 'error' });
+        if (cancelled || memory?.key === cacheKey) return;
+        setError(true);
       });
+
     return () => {
       cancelled = true;
     };
-  }, [q, status, page, reloadKey]);
+  }, [cacheKey, q, tag, status, page, reloadKey]);
+
+  useEffect(() => {
+    if (data) reconcileLive(data.items);
+  }, [data]);
+
+  const view =
+    data && liveVersion >= 0 ? { ...data, ...applyLive(data.items, data.total) } : null;
 
   function onSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    replaceQuery(router, { q: qInput, status, page: 1 });
+    replaceQuery(router, { q: qInput, status, tag, page: 1 });
   }
 
-  const filtered = q.trim().length > 0 || status.length > 0;
+  function onTag(nextTag: string) {
+    replaceQuery(router, { q, status, tag: nextTag === tag ? '' : nextTag, page: 1 });
+  }
+
+  const filtered = q.trim().length > 0 || status.length > 0 || tag.length > 0;
+  const statusValue = PROJECT_STATUSES.includes(
+    status as (typeof PROJECT_STATUSES)[number],
+  )
+    ? status
+    : '';
 
   return (
-    <section>
-      <div className="max-w-2xl">
-        <h1 className="font-serif text-4xl tracking-tight">Meus projetos</h1>
-        <p className="mt-2 text-sm leading-6 text-stone-600">
-          Guarde ideias, links e o andamento do que você está construindo.
-        </p>
-      </div>
-
-      <form
-        onSubmit={onSearchSubmit}
-        className="mt-6 grid gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-card sm:grid-cols-[1fr_14rem]"
-      >
-        <div>
-          <label htmlFor="q" className="mb-1 block text-sm font-medium">
-            Buscar
+    <>
+      <form id="busca" role="search" className="toolbar" onSubmit={onSearchSubmit}>
+        <div className="field">
+          <label htmlFor="q" className="field-label">
+            Busca
           </label>
-          <input
-            id="q"
-            name="q"
-            value={qInput}
-            placeholder="Nome ou tag"
-            onChange={(event) => setQInput(event.target.value)}
-            className="w-full rounded-xl border border-stone-300 px-3 py-2 text-sm"
-          />
+          <div className="search">
+            <input
+              id="q"
+              name="q"
+              value={qInput}
+              placeholder="Nome ou tag"
+              autoComplete="off"
+              aria-keyshortcuts="/"
+              onChange={(event) => setQInput(event.target.value)}
+            />
+            <kbd aria-hidden="true">/</kbd>
+          </div>
         </div>
-        <div>
-          <label htmlFor="status" className="mb-1 block text-sm font-medium">
+        <div className="field">
+          <label htmlFor="status" className="field-label">
             Status
           </label>
           <select
             id="status"
             name="status"
-            value={
-              PROJECT_STATUSES.includes(status as (typeof PROJECT_STATUSES)[number])
-                ? status
-                : ''
-            }
+            value={statusValue}
             onChange={(event) =>
-              replaceQuery(router, { q, status: event.target.value, page: 1 })
+              replaceQuery(router, {
+                q: qInput,
+                status: event.target.value,
+                tag,
+                page: 1,
+              })
             }
-            className="w-full rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm"
+            className="control select"
           >
             <option value="">Todos</option>
             {PROJECT_STATUSES.map((item) => (
@@ -114,169 +163,185 @@ export function ProjectList() {
         </div>
       </form>
 
-      <div className="mt-6">
-        {state.kind === 'loading' ? (
-          <p className="text-sm text-stone-600" role="status">
-            Carregando projetos...
-          </p>
-        ) : null}
+      {tag ? (
+        <div className="filters">
+          <button
+            type="button"
+            className="chip"
+            aria-pressed="true"
+            onClick={() => replaceQuery(router, { q, status, tag: '', page: 1 })}
+          >
+            {tag}
+            <span aria-hidden="true">×</span>
+            <span className="sr-only">Remover tag</span>
+          </button>
+        </div>
+      ) : null}
 
-        {state.kind === 'error' ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4" role="alert">
-            <p className="text-sm text-red-800">Não foi possível carregar os projetos.</p>
+      {!data && !error ? (
+        <>
+          <p className="sr-only" role="status">
+            Carregando projetos
+          </p>
+          <ListSkeleton />
+        </>
+      ) : null}
+
+      {error && !view ? (
+        <ErrorState
+          title="Não foi possível carregar"
+          description="A lista não chegou. Tente de novo."
+          onRetry={() => setReloadKey((current) => current + 1)}
+        />
+      ) : null}
+
+      {view && view.items.length === 0 ? (
+        filtered ? (
+          <EmptyState
+            title="Nenhum resultado"
+            description="Tente outro nome, outra tag ou outro status."
+          >
             <button
               type="button"
-              onClick={() => setReloadKey((current) => current + 1)}
-              className="mt-3 rounded-full border border-red-300 px-4 py-2 text-sm font-medium text-red-900 hover:bg-white"
+              className="btn btn-ghost"
+              onClick={() => {
+                setQInput('');
+                replaceQuery(router, { q: '', status: '', tag: '', page: 1 });
+              }}
             >
-              Tentar novamente
+              Limpar filtros
             </button>
-          </div>
-        ) : null}
+          </EmptyState>
+        ) : (
+          <EmptyState
+            mark="0"
+            title="Nenhum projeto ainda"
+            description="Crie o primeiro para começar."
+          >
+            <TransitionLink href="/projects/new" className="btn btn-primary">
+              Criar projeto
+            </TransitionLink>
+          </EmptyState>
+        )
+      ) : null}
 
-        {state.kind === 'ready' && state.data.items.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-10 text-center">
-            <p className="font-medium">
-              {filtered ? 'Nenhum projeto encontrado.' : 'Nenhum projeto por aqui ainda.'}
-            </p>
-            <p className="mt-1 text-sm text-stone-600">
-              {filtered
-                ? 'Tente outro nome, outra tag ou outro status.'
-                : 'Crie o primeiro para começar a lista.'}
-            </p>
-            {!filtered ? (
-              <Link
-                href="/projects/new"
-                className="mt-4 inline-flex rounded-full bg-pine px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
-              >
-                Criar projeto
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
-
-        {state.kind === 'ready' && state.data.items.length > 0 ? (
-          <ProjectResults
-            data={state.data}
-            onPage={(nextPage) => replaceQuery(router, { q, status, page: nextPage })}
-          />
-        ) : null}
-      </div>
-    </section>
+      {view && view.items.length > 0 ? (
+        <ProjectResults
+          data={view}
+          activeTag={tag}
+          onTag={onTag}
+          onPage={(nextPage) => replaceQuery(router, { q, status, tag, page: nextPage })}
+        />
+      ) : null}
+    </>
   );
 }
 
 function ProjectResults({
   data,
+  activeTag,
+  onTag,
   onPage,
 }: {
   data: ProjectPage;
+  activeTag: string;
+  onTag: (tag: string) => void;
   onPage: (page: number) => void;
 }) {
   const pageCount = Math.max(1, Math.ceil(data.total / data.pageSize));
+  const countLabel = data.total === 1 ? '1 projeto' : `${data.total} projetos`;
 
   return (
     <div>
-      <p className="mb-3 text-sm text-stone-600">
-        {data.total === 1 ? '1 projeto' : `${data.total} projetos`}
-      </p>
-      <div className="grid gap-3 md:hidden">
-        {data.items.map((project) => (
-          <ProjectCard key={project.id} project={project} />
-        ))}
-      </div>
-      <div className="hidden overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-card md:block">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-stone-50 text-stone-600">
-            <tr>
-              <th className="px-4 py-3 font-medium">Nome</th>
-              <th className="px-4 py-3 font-medium">Descrição</th>
-              <th className="px-4 py-3 font-medium">Link</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Tags</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.items.map((project) => (
-              <tr key={project.id} className="border-t border-stone-200">
-                <td className="px-4 py-3 font-medium">
-                  <Link href={`/projects/${project.id}`} className="hover:text-pine">
-                    {project.name}
-                  </Link>
-                </td>
-                <td className="max-w-xs px-4 py-3 text-stone-600">
-                  <span className="line-clamp-2">
-                    {project.description || 'Sem descrição'}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <ProjectLink url={project.url} />
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={project.status} />
-                </td>
-                <td className="px-4 py-3">
-                  <TagList tags={project.tags} />
-                </td>
+      <p className="count num">{countLabel}</p>
+      <div className="results">
+        <ul className="results-cards">
+          {data.items.map((project) => (
+            <li key={project.id}>
+              <ProjectCard project={project} activeTag={activeTag} onTag={onTag} />
+            </li>
+          ))}
+        </ul>
+        <div className="results-table card table-scroll">
+          <table className="data">
+            <caption className="sr-only">Lista de projetos</caption>
+            <thead>
+              <tr>
+                <th scope="col">Nome</th>
+                <th scope="col">Status</th>
+                <th scope="col">Tags</th>
+                <th scope="col">Atualizado</th>
+                <th scope="col">Link</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.items.map((project) => (
+                <tr key={project.id}>
+                  <td>
+                    <TransitionLink
+                      href={`/projects/${project.id}`}
+                      className="name-link"
+                    >
+                      {project.name}
+                    </TransitionLink>
+                    <p className="subline">{project.description || 'Sem descrição'}</p>
+                  </td>
+                  <td>
+                    <StatusBadge status={project.status} />
+                  </td>
+                  <td>
+                    <TagList
+                      tags={project.tags}
+                      dense
+                      activeTag={activeTag}
+                      onTag={onTag}
+                    />
+                  </td>
+                  <td className="nowrap num">{formatDate(project.updatedAt, 'short')}</td>
+                  <td>
+                    <ProjectLink url={project.url} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <Pagination page={data.page} pageCount={pageCount} onPage={onPage} />
+      {pageCount > 1 ? (
+        <Pagination page={data.page} pageCount={pageCount} onPage={onPage} />
+      ) : null}
     </div>
   );
 }
 
-function ProjectCard({ project }: { project: Project }) {
+function ProjectCard({
+  project,
+  activeTag,
+  onTag,
+}: {
+  project: Project;
+  activeTag: string;
+  onTag: (tag: string) => void;
+}) {
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-card">
-      <div className="flex items-start justify-between gap-3">
-        <Link href={`/projects/${project.id}`} className="font-medium hover:text-pine">
-          {project.name}
-        </Link>
+    <article className="card project-card">
+      <div className="project-card-top">
+        <h2 className="card-title">
+          <TransitionLink href={`/projects/${project.id}`} className="name-link">
+            {project.name}
+          </TransitionLink>
+        </h2>
         <StatusBadge status={project.status} />
       </div>
-      <p className="mt-2 line-clamp-3 text-sm leading-6 text-stone-600">
-        {project.description || 'Sem descrição'}
-      </p>
-      <div className="mt-3">
+      <p className="card-copy clamp-3">{project.description || 'Sem descrição'}</p>
+      <TagList tags={project.tags} activeTag={activeTag} onTag={onTag} />
+      <div className="card-foot">
         <ProjectLink url={project.url} />
-      </div>
-      <div className="mt-3">
-        <TagList tags={project.tags} />
+        <time className="num" dateTime={project.updatedAt}>
+          {formatDate(project.updatedAt, 'short')}
+        </time>
       </div>
     </article>
-  );
-}
-
-function ProjectLink({ url }: { url: string | null }) {
-  if (!url) return <span className="text-sm text-stone-400">Sem link</span>;
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      className="text-sm text-pine underline-offset-2 hover:underline"
-    >
-      {url.replace(/^https?:\/\//, '')}
-    </a>
-  );
-}
-
-function TagList({ tags }: { tags: string[] }) {
-  if (tags.length === 0) return <span className="text-sm text-stone-400">Sem tags</span>;
-  return (
-    <ul className="flex flex-wrap gap-1.5">
-      {tags.map((tag) => (
-        <li
-          key={tag}
-          className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-700"
-        >
-          {tag}
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -290,23 +355,23 @@ function Pagination({
   onPage: (page: number) => void;
 }) {
   return (
-    <nav aria-label="Paginação" className="mt-4 flex items-center justify-between gap-3">
+    <nav aria-label="Paginação" className="pager">
       <button
         type="button"
         onClick={() => onPage(page - 1)}
         disabled={page <= 1}
-        className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium disabled:opacity-40"
+        className="btn btn-ghost"
       >
         Anterior
       </button>
-      <p className="text-sm text-stone-600">
+      <p className="num muted">
         Página {page} de {pageCount}
       </p>
       <button
         type="button"
         onClick={() => onPage(page + 1)}
         disabled={page >= pageCount}
-        className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium disabled:opacity-40"
+        className="btn btn-ghost"
       >
         Próxima
       </button>
@@ -316,11 +381,13 @@ function Pagination({
 
 function replaceQuery(
   router: ReturnType<typeof useRouter>,
-  next: { q: string; status: string; page: number },
+  next: { q: string; status: string; tag: string; page: number },
 ) {
   const params = new URLSearchParams();
   const q = next.q.trim();
+  const tag = next.tag.trim();
   if (q) params.set('q', q);
+  if (tag) params.set('tag', tag);
   if (next.status) params.set('status', next.status);
   if (next.page > 1) params.set('page', String(next.page));
   const query = params.toString();

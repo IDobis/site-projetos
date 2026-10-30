@@ -1,13 +1,18 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { ApiError, createProject, updateProject } from '@/lib/api';
 import { clearDraft, draftKey, ProjectDraft, readDraft, saveDraft } from '@/lib/draft';
+import { clearFormFailure, peekFormFailure, stashFormFailure } from '@/lib/form-error';
 import { STATUS_LABELS } from '@/lib/labels';
+import { optimisticUpsert, revertUpsert, settleUpsert } from '@/lib/live';
+import { withViewTransition } from '@/lib/navigate';
 import { parseTags } from '@/lib/tags';
-import { PROJECT_STATUSES, ProjectStatus } from '@/lib/types';
+import { PROJECT_STATUSES, Project, ProjectStatus } from '@/lib/types';
+import { toast } from './Toaster';
+import { FormSkeleton } from './States';
+import { TransitionLink } from './TransitionLink';
 
 const EMPTY_DRAFT: ProjectDraft = {
   name: '',
@@ -17,19 +22,17 @@ const EMPTY_DRAFT: ProjectDraft = {
   tags: '',
 };
 
+const FIELD_ORDER = ['name', 'description', 'url', 'status', 'tags'] as const;
+
 type ProjectFormProps = {
   mode: 'create' | 'edit';
-  projectId?: string;
+  project?: Project;
   initial?: ProjectDraft;
 };
 
-export function ProjectForm({
-  mode,
-  projectId,
-  initial = EMPTY_DRAFT,
-}: ProjectFormProps) {
+export function ProjectForm({ mode, project, initial = EMPTY_DRAFT }: ProjectFormProps) {
   const router = useRouter();
-  const key = draftKey(mode === 'edit' ? projectId : undefined);
+  const key = draftKey(mode === 'edit' ? project?.id : undefined);
   const [form, setForm] = useState<ProjectDraft>(initial);
   const [ready, setReady] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -37,9 +40,24 @@ export function ProjectForm({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const draft = readDraft(key);
-    if (draft) setForm(draft);
-    setReady(true);
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      if (cancelled) return;
+      const draft = readDraft(key);
+      if (draft) setForm(draft);
+      const failure = peekFormFailure(key);
+      if (failure) {
+        setErrors(failure.fields);
+        setFormError(Object.keys(failure.fields).length > 0 ? null : failure.message);
+        focusField(failure.fields);
+      }
+      setReady(true);
+      window.setTimeout(() => clearFormFailure(key), 1500);
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
   }, [key]);
 
   function update<K extends keyof ProjectDraft>(field: K, value: ProjectDraft[K]) {
@@ -58,6 +76,16 @@ export function ProjectForm({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
+
+    const local = localErrors(form);
+    if (Object.keys(local).length > 0) {
+      setErrors(local);
+      setFormError(null);
+      focusField(local);
+      return;
+    }
+
     setSaving(true);
     setFormError(null);
     setErrors({});
@@ -70,65 +98,84 @@ export function ProjectForm({
       tags: parseTags(form.tags),
     };
 
-    try {
-      const saved =
-        mode === 'create' || !projectId
-          ? await createProject(payload)
-          : await updateProject(projectId, payload);
-      clearDraft(key);
-      router.push(`/projects/${saved.id}`);
-    } catch (error) {
-      if (error instanceof ApiError) {
-        setErrors(error.fields ?? {});
-        if (!error.fields || Object.keys(error.fields).length === 0) {
-          setFormError(error.message);
-        }
-      } else {
-        setFormError('Não foi possível salvar o projeto.');
+    if (mode === 'edit' && project) {
+      const optimistic = toOptimistic(project, form);
+      optimisticUpsert(optimistic);
+      withViewTransition(() => router.push(`/projects/${project.id}`));
+      try {
+        const saved = await updateProject(project.id, payload);
+        settleUpsert(saved);
+        clearDraft(key);
+        toast('Projeto salvo.');
+      } catch (error) {
+        revertUpsert(project.id);
+        const failure = toFailure(error);
+        stashFormFailure(key, failure);
+        toast(
+          Object.keys(failure.fields).length > 0 ? 'Confira os campos.' : failure.message,
+        );
+        router.push(`/projects/${project.id}/edit`);
       }
+      return;
+    }
+
+    try {
+      const saved = await createProject(payload);
+      clearDraft(key);
+      settleUpsert(saved);
+      toast('Projeto salvo.');
+      withViewTransition(() => router.push(`/projects/${saved.id}`));
+    } catch (error) {
+      const failure = toFailure(error);
+      setErrors(failure.fields);
+      setFormError(Object.keys(failure.fields).length > 0 ? null : failure.message);
+      focusField(failure.fields);
       setSaving(false);
     }
   }
 
   if (!ready) {
     return (
-      <p className="text-sm text-stone-600" role="status">
-        Carregando formulário...
-      </p>
+      <>
+        <p className="sr-only" role="status">
+          Carregando formulário
+        </p>
+        <FormSkeleton />
+      </>
     );
   }
 
-  const cancelHref = mode === 'edit' && projectId ? `/projects/${projectId}` : '/';
+  const cancelHref = mode === 'edit' && project ? `/projects/${project.id}` : '/';
 
   return (
-    <form onSubmit={onSubmit} noValidate className="mx-auto max-w-2xl">
-      <h1 className="font-serif text-3xl tracking-tight sm:text-4xl">
-        {mode === 'create' ? 'Novo projeto' : 'Editar projeto'}
-      </h1>
-      <p className="mt-2 text-sm text-stone-600">
-        O rascunho fica salvo neste navegador até o projeto ser gravado.
-      </p>
+    <form
+      onSubmit={onSubmit}
+      noValidate
+      className="form-narrow"
+      aria-describedby={formError ? 'form-error' : undefined}
+    >
+      <h1 className="title">{mode === 'create' ? 'Novo projeto' : 'Editar projeto'}</h1>
+      <p className="lede">O rascunho fica neste navegador.</p>
 
       {formError ? (
-        <p
-          className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
-          role="alert"
-        >
+        <p id="form-error" className="form-alert" role="alert">
           {formError}
         </p>
       ) : null}
 
-      <div className="mt-6 space-y-4 rounded-2xl border border-stone-200 bg-white p-4 shadow-card sm:p-6">
+      <div className="card form-card">
         <Field label="Nome" id="name" error={errors.name}>
           <input
             id="name"
             name="name"
             value={form.name}
             maxLength={120}
+            required
+            autoComplete="off"
             aria-invalid={Boolean(errors.name)}
             aria-describedby={errors.name ? 'name-error' : undefined}
             onChange={(event) => update('name', event.target.value)}
-            className={inputClass(Boolean(errors.name))}
+            className="control"
           />
         </Field>
 
@@ -141,7 +188,7 @@ export function ProjectForm({
             aria-invalid={Boolean(errors.description)}
             aria-describedby={errors.description ? 'description-error' : undefined}
             onChange={(event) => update('description', event.target.value)}
-            className={inputClass(Boolean(errors.description))}
+            className="control"
           />
         </Field>
 
@@ -151,12 +198,13 @@ export function ProjectForm({
             name="url"
             type="url"
             inputMode="url"
+            autoComplete="url"
             placeholder="https://"
             value={form.url}
             aria-invalid={Boolean(errors.url)}
             aria-describedby={errors.url ? 'url-error' : undefined}
             onChange={(event) => update('url', event.target.value)}
-            className={inputClass(Boolean(errors.url))}
+            className="control"
           />
         </Field>
 
@@ -168,7 +216,7 @@ export function ProjectForm({
             aria-invalid={Boolean(errors.status)}
             aria-describedby={errors.status ? 'status-error' : undefined}
             onChange={(event) => update('status', event.target.value as ProjectStatus)}
-            className={inputClass(Boolean(errors.status))}
+            className="control select"
           >
             {PROJECT_STATUSES.map((status) => (
               <option key={status} value={status}>
@@ -178,12 +226,7 @@ export function ProjectForm({
           </select>
         </Field>
 
-        <Field
-          label="Tags"
-          id="tags"
-          error={errors.tags}
-          hint="Separe as tags por vírgula."
-        >
+        <Field label="Tags" id="tags" error={errors.tags} hint="Separe por vírgula.">
           <input
             id="tags"
             name="tags"
@@ -191,24 +234,17 @@ export function ProjectForm({
             aria-invalid={Boolean(errors.tags)}
             aria-describedby={errors.tags ? 'tags-error' : 'tags-hint'}
             onChange={(event) => update('tags', event.target.value)}
-            className={inputClass(Boolean(errors.tags))}
+            className="control"
           />
         </Field>
       </div>
 
-      <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Link
-          href={cancelHref}
-          className="rounded-full border border-stone-300 px-4 py-2 text-center text-sm font-medium hover:bg-white"
-        >
+      <div className="actions inline">
+        <TransitionLink href={cancelHref} className="btn btn-ghost">
           Cancelar
-        </Link>
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-full bg-pine px-4 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60"
-        >
-          {saving ? 'Salvando...' : 'Salvar'}
+        </TransitionLink>
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? 'Salvando' : 'Salvar'}
         </button>
       </div>
     </form>
@@ -229,18 +265,18 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <div>
-      <label htmlFor={id} className="mb-1 block text-sm font-medium">
+    <div className="field">
+      <label htmlFor={id} className="field-label">
         {label}
       </label>
       {children}
       {hint && !error ? (
-        <p id={`${id}-hint`} className="mt-1 text-xs text-stone-500">
+        <p id={`${id}-hint`} className="hint">
           {hint}
         </p>
       ) : null}
       {error ? (
-        <p id={`${id}-error`} className="mt-1 text-sm text-red-700">
+        <p id={`${id}-error`} className="field-error">
           {error}
         </p>
       ) : null}
@@ -248,8 +284,41 @@ function Field({
   );
 }
 
-function inputClass(invalid: boolean): string {
-  return `w-full rounded-xl border bg-white px-3 py-2 text-sm ${
-    invalid ? 'border-red-400' : 'border-stone-300'
-  }`;
+function localErrors(form: ProjectDraft): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const name = form.name.trim();
+  if (name.length === 0) errors.name = 'Informe o nome.';
+  else if (name.length > 120) errors.name = 'O nome deve ter no máximo 120 caracteres.';
+  const url = form.url.trim();
+  if (url && !/^https?:\/\/\S+$/i.test(url)) {
+    errors.url = 'Informe uma URL válida, com http:// ou https://.';
+  }
+  return errors;
+}
+
+function toOptimistic(project: Project, form: ProjectDraft): Project {
+  const description = form.description.trim();
+  const url = form.url.trim();
+  return {
+    ...project,
+    name: form.name.trim(),
+    description: description || null,
+    url: url || null,
+    status: form.status,
+    tags: parseTags(form.tags),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function toFailure(error: unknown): { fields: Record<string, string>; message: string } {
+  if (error instanceof ApiError) {
+    return { fields: error.fields ?? {}, message: error.message };
+  }
+  return { fields: {}, message: 'Não foi possível salvar o projeto.' };
+}
+
+function focusField(fields: Record<string, string>) {
+  const id = FIELD_ORDER.find((field) => fields[field]);
+  if (!id) return;
+  window.requestAnimationFrame(() => document.getElementById(id)?.focus());
 }
