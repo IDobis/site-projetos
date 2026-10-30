@@ -6,8 +6,11 @@ import { refreshCounts, subscribeCounts, getCounts } from '@/lib/counts';
 import { STATUS_NAV_LABELS } from '@/lib/labels';
 import { useLiveVersion } from '@/lib/live';
 import { withViewTransition } from '@/lib/navigate';
+import { SIDEBAR_STORAGE_KEY } from '@/lib/theme';
 import { isProjectStatus, ProjectStatus } from '@/lib/types';
 import {
+  IconChevronsLeft,
+  IconChevronsRight,
   IconClose,
   IconDone,
   IconGrid,
@@ -19,6 +22,27 @@ import {
 } from './Icons';
 import { ThemeToggle } from './ThemeToggle';
 import { TransitionLink } from './TransitionLink';
+
+type SidebarMode = 'expanded' | 'collapsed';
+
+const SIDEBAR_EVENT = 'projetos-sidebar';
+
+function subscribeSidebar(listener: () => void) {
+  window.addEventListener(SIDEBAR_EVENT, listener);
+  return () => window.removeEventListener(SIDEBAR_EVENT, listener);
+}
+
+function readSidebar(): SidebarMode {
+  return localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'collapsed'
+    ? 'collapsed'
+    : 'expanded';
+}
+
+function writeSidebar(mode: SidebarMode) {
+  localStorage.setItem(SIDEBAR_STORAGE_KEY, mode);
+  document.documentElement.dataset.sidebar = mode;
+  window.dispatchEvent(new Event(SIDEBAR_EVENT));
+}
 
 const NAV: {
   status: '' | ProjectStatus;
@@ -50,6 +74,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const searchKey = searchParams.toString();
   const liveVersion = useLiveVersion();
+  const mode = useSyncExternalStore<SidebarMode>(
+    subscribeSidebar,
+    readSidebar,
+    () => 'expanded',
+  );
+  const collapsed = mode === 'collapsed';
 
   useEffect(() => {
     dialogRef.current?.close();
@@ -61,10 +91,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-frame">
-      <aside className="sidebar" aria-label="Navegação">
+      <aside id="menu-lateral" className="sidebar" aria-label="Navegação">
         <SidebarBrand />
-        <MenuLinks />
-        <SidebarFoot />
+        <MenuLinks tooltips={collapsed} />
+        <SidebarFoot
+          collapsed={collapsed}
+          onToggle={() => writeSidebar(collapsed ? 'expanded' : 'collapsed')}
+        />
       </aside>
       <div className="content-shift">
         <header className="mobile-bar">
@@ -128,7 +161,7 @@ function SidebarBrand() {
   );
 }
 
-function MenuLinks() {
+function MenuLinks({ tooltips = false }: { tooltips?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -155,7 +188,7 @@ function MenuLinks() {
                 href={href}
                 className="nav-link"
                 aria-current={current ? 'page' : undefined}
-                title={item.label}
+                title={tooltips ? item.label : undefined}
                 onClick={(event) => {
                   if (
                     event.metaKey ||
@@ -182,7 +215,13 @@ function MenuLinks() {
   );
 }
 
-function SidebarFoot() {
+function SidebarFoot({
+  collapsed,
+  onToggle,
+}: {
+  collapsed?: boolean;
+  onToggle?: () => void;
+}) {
   const pathname = usePathname();
   return (
     <div className="sidebar-foot">
@@ -194,11 +233,30 @@ function SidebarFoot() {
         href="/projects/new"
         className="btn btn-primary sidebar-new"
         aria-current={pathname === '/projects/new' ? 'page' : undefined}
-        title="Novo projeto"
+        title={collapsed ? 'Novo projeto' : undefined}
       >
         <IconPlus />
         <span className="btn-label">Novo projeto</span>
       </TransitionLink>
+      {onToggle ? (
+        <button
+          type="button"
+          className="collapse-btn"
+          aria-controls="menu-lateral"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expandir' : undefined}
+          title={collapsed ? 'Expandir' : undefined}
+          onClick={onToggle}
+        >
+          <span className="collapse-icon-left">
+            <IconChevronsLeft />
+          </span>
+          <span className="collapse-icon-right">
+            <IconChevronsRight />
+          </span>
+          <span className="collapse-label">Recolher</span>
+        </button>
+      ) : null}
     </div>
   );
 }
