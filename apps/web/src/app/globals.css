@@ -333,6 +333,10 @@ body {
   height: 1.1rem;
 }
 
+.sidebar-collapse {
+  padding: 0 0.75rem 0.15rem;
+}
+
 .collapse-btn {
   display: inline-flex;
   align-items: center;
@@ -341,7 +345,7 @@ body {
   width: 100%;
   min-height: 2.75rem;
   margin: 0;
-  padding: 0.2rem 0.35rem;
+  padding: 0.35rem 0.7rem;
   border: 0;
   border-radius: 0.55rem;
   background: transparent;

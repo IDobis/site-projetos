@@ -93,11 +93,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="app-frame">
       <aside id="menu-lateral" className="sidebar" aria-label="Navegação">
         <SidebarBrand />
-        <MenuLinks tooltips={collapsed} />
-        <SidebarFoot
+        <CollapseToggle
           collapsed={collapsed}
           onToggle={() => writeSidebar(collapsed ? 'expanded' : 'collapsed')}
         />
+        <MenuLinks tooltips={collapsed} />
+        <SidebarFoot collapsed={collapsed} />
       </aside>
       <div className="content-shift">
         <header className="mobile-bar">
@@ -161,6 +162,36 @@ function SidebarBrand() {
   );
 }
 
+function CollapseToggle({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="sidebar-collapse">
+      <button
+        type="button"
+        className="collapse-btn"
+        aria-controls="menu-lateral"
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? 'Expandir' : undefined}
+        title={collapsed ? 'Expandir' : undefined}
+        onClick={onToggle}
+      >
+        <span className="collapse-icon-left">
+          <IconChevronsLeft />
+        </span>
+        <span className="collapse-icon-right">
+          <IconChevronsRight />
+        </span>
+        <span className="collapse-label">Recolher</span>
+      </button>
+    </div>
+  );
+}
+
 function MenuLinks({ tooltips = false }: { tooltips?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -215,13 +246,7 @@ function MenuLinks({ tooltips = false }: { tooltips?: boolean }) {
   );
 }
 
-function SidebarFoot({
-  collapsed,
-  onToggle,
-}: {
-  collapsed?: boolean;
-  onToggle?: () => void;
-}) {
+function SidebarFoot({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
   return (
     <div className="sidebar-foot">
@@ -238,25 +263,6 @@ function SidebarFoot({
         <IconPlus />
         <span className="btn-label">Novo projeto</span>
       </TransitionLink>
-      {onToggle ? (
-        <button
-          type="button"
-          className="collapse-btn"
-          aria-controls="menu-lateral"
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? 'Expandir' : undefined}
-          title={collapsed ? 'Expandir' : undefined}
-          onClick={onToggle}
-        >
-          <span className="collapse-icon-left">
-            <IconChevronsLeft />
-          </span>
-          <span className="collapse-icon-right">
-            <IconChevronsRight />
-          </span>
-          <span className="collapse-label">Recolher</span>
-        </button>
-      ) : null}
     </div>
   );
 }
