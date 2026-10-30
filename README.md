@@ -49,3 +49,5 @@ npm run test
 ```
 
 Cada app também expõe `lint`, `build` e `test`.
+
+O CI do GitHub Actions (`.github/workflows/ci.yml`) executa `npm ci`, `npm run lint`, `npm run build`, `npm run test` e `npm run format:check` em pull requests e em pushes na branch `main`.
