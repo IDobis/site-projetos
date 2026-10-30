@@ -6,7 +6,6 @@ import { refreshCounts, subscribeCounts, getCounts } from '@/lib/counts';
 import { STATUS_NAV_LABELS } from '@/lib/labels';
 import { useLiveVersion } from '@/lib/live';
 import { withViewTransition } from '@/lib/navigate';
-import { SIDEBAR_STORAGE_KEY } from '@/lib/theme';
 import { isProjectStatus, ProjectStatus } from '@/lib/types';
 import {
   IconClose,
@@ -14,17 +13,12 @@ import {
   IconGrid,
   IconIdea,
   IconMenu,
-  IconPanel,
   IconPaused,
   IconPlus,
   IconProgress,
 } from './Icons';
 import { ThemeToggle } from './ThemeToggle';
 import { TransitionLink } from './TransitionLink';
-
-type SidebarMode = 'expanded' | 'collapsed';
-
-const SIDEBAR_EVENT = 'projetos-sidebar';
 
 const NAV: {
   status: '' | ProjectStatus;
@@ -37,23 +31,6 @@ const NAV: {
   { status: 'paused', label: STATUS_NAV_LABELS.paused, icon: IconPaused },
   { status: 'done', label: STATUS_NAV_LABELS.done, icon: IconDone },
 ];
-
-function subscribeSidebar(listener: () => void) {
-  window.addEventListener(SIDEBAR_EVENT, listener);
-  return () => window.removeEventListener(SIDEBAR_EVENT, listener);
-}
-
-function readSidebar(): SidebarMode {
-  return localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'collapsed'
-    ? 'collapsed'
-    : 'expanded';
-}
-
-function writeSidebar(mode: SidebarMode) {
-  localStorage.setItem(SIDEBAR_STORAGE_KEY, mode);
-  document.documentElement.dataset.sidebar = mode;
-  window.dispatchEvent(new Event(SIDEBAR_EVENT));
-}
 
 function filterHref(status: string, searchParams: URLSearchParams) {
   const params = new URLSearchParams();
@@ -73,11 +50,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const searchKey = searchParams.toString();
   const liveVersion = useLiveVersion();
-  const mode = useSyncExternalStore<SidebarMode>(
-    subscribeSidebar,
-    readSidebar,
-    () => 'expanded',
-  );
 
   useEffect(() => {
     dialogRef.current?.close();
@@ -87,14 +59,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     refreshCounts().catch(() => undefined);
   }, [liveVersion]);
 
-  function toggleSidebar() {
-    writeSidebar(mode === 'collapsed' ? 'expanded' : 'collapsed');
-  }
-
   return (
     <div className="app-frame">
       <aside className="sidebar" aria-label="Navegação">
-        <SidebarBrand mode={mode} onToggle={toggleSidebar} />
+        <SidebarBrand />
         <MenuLinks />
         <SidebarFoot />
       </aside>
@@ -147,8 +115,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SidebarBrand({ mode, onToggle }: { mode: SidebarMode; onToggle: () => void }) {
-  const collapsed = mode === 'collapsed';
+function SidebarBrand() {
   return (
     <div className="sidebar-brand">
       <TransitionLink href="/" className="brand-lockup">
@@ -157,15 +124,6 @@ function SidebarBrand({ mode, onToggle }: { mode: SidebarMode; onToggle: () => v
         </span>
         <span className="brand-name">Projetos</span>
       </TransitionLink>
-      <button
-        type="button"
-        className="icon-btn sidebar-toggle"
-        aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-        aria-pressed={collapsed}
-        onClick={onToggle}
-      >
-        <IconPanel />
-      </button>
     </div>
   );
 }

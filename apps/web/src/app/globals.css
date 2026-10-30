@@ -17,6 +17,9 @@
   --shadow-hover: 0 1px 2px rgb(16 24 40 / 6%), 0 10px 24px rgb(16 24 40 / 8%);
   --radius: 0.9rem;
   --sidebar-w: 15.5rem;
+  --nav-hover: color-mix(in srgb, var(--ink) 5%, transparent);
+  --nav-active: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --nav-count: var(--accent);
   --step-xs: 0.75rem;
   --step-sm: 0.875rem;
   --step-md: 1rem;
@@ -28,16 +31,21 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --canvas: #0c0e13;
-    --surface: #171a21;
-    --sidebar: #12151c;
-    --ink: #f4f6f8;
-    --muted: #9aa3b2;
-    --accent: #8eabff;
-    --accent-ink: #0d1428;
-    --danger: #ffb4ab;
-    --shadow: 0 1px 2px rgb(0 0 0 / 35%), 0 8px 24px rgb(0 0 0 / 28%);
-    --shadow-hover: 0 1px 2px rgb(0 0 0 / 40%), 0 14px 32px rgb(0 0 0 / 36%);
+    --canvas: #141414;
+    --surface: #1b1b1b;
+    --sidebar: #242424;
+    --ink: #f2f2f2;
+    --muted: #a3a3a3;
+    --line: rgb(255 255 255 / 7%);
+    --accent: #f2f2f2;
+    --accent-ink: #161616;
+    --danger: #e7b2aa;
+    --shadow: none;
+    --shadow-hover: none;
+    --radius: 0.7rem;
+    --nav-hover: #2c2c2c;
+    --nav-active: #323232;
+    --nav-count: #d0d0d0;
   }
 }
 
@@ -53,24 +61,30 @@
   --danger: #c2413a;
   --shadow: 0 1px 2px rgb(16 24 40 / 5%), 0 1px 3px rgb(16 24 40 / 6%);
   --shadow-hover: 0 1px 2px rgb(16 24 40 / 6%), 0 10px 24px rgb(16 24 40 / 8%);
+  --line: color-mix(in srgb, var(--ink) 10%, transparent);
+  --radius: 0.9rem;
+  --nav-hover: color-mix(in srgb, var(--ink) 5%, transparent);
+  --nav-active: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --nav-count: var(--accent);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --canvas: #0c0e13;
-  --surface: #171a21;
-  --sidebar: #12151c;
-  --ink: #f4f6f8;
-  --muted: #9aa3b2;
-  --accent: #8eabff;
-  --accent-ink: #0d1428;
-  --danger: #ffb4ab;
-  --shadow: 0 1px 2px rgb(0 0 0 / 35%), 0 8px 24px rgb(0 0 0 / 28%);
-  --shadow-hover: 0 1px 2px rgb(0 0 0 / 40%), 0 14px 32px rgb(0 0 0 / 36%);
-}
-
-:root[data-sidebar='collapsed'] {
-  --sidebar-w: 4.75rem;
+  --canvas: #141414;
+  --surface: #1b1b1b;
+  --sidebar: #242424;
+  --ink: #f2f2f2;
+  --muted: #a3a3a3;
+  --line: rgb(255 255 255 / 7%);
+  --accent: #f2f2f2;
+  --accent-ink: #161616;
+  --danger: #e7b2aa;
+  --shadow: none;
+  --shadow-hover: none;
+  --radius: 0.7rem;
+  --nav-hover: #2c2c2c;
+  --nav-active: #323232;
+  --nav-count: #d0d0d0;
 }
 
 html,
@@ -271,18 +285,18 @@ body {
 }
 
 .nav-link:hover {
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  background: var(--nav-hover);
   color: var(--ink);
 }
 
 .nav-link[aria-current='page'] {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  background: var(--nav-active);
   color: var(--ink);
   font-weight: 600;
 }
 
 .nav-link[aria-current='page'] .nav-count {
-  color: var(--accent);
+  color: var(--nav-count);
 }
 
 .sidebar-foot {
@@ -365,42 +379,6 @@ dialog.drawer[open] {
   .shell {
     width: min(76rem, calc(100% - 3.5rem));
   }
-}
-
-:root[data-sidebar='collapsed'] .sidebar .brand-name,
-:root[data-sidebar='collapsed'] .sidebar .nav-label,
-:root[data-sidebar='collapsed'] .sidebar .nav-count,
-:root[data-sidebar='collapsed'] .sidebar .theme-label,
-:root[data-sidebar='collapsed'] .sidebar .btn-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-:root[data-sidebar='collapsed'] .sidebar .sidebar-brand,
-:root[data-sidebar='collapsed'] .sidebar .nav-link,
-:root[data-sidebar='collapsed'] .sidebar .sidebar-theme,
-:root[data-sidebar='collapsed'] .sidebar .sidebar-foot {
-  justify-content: center;
-}
-
-:root[data-sidebar='collapsed'] .sidebar .sidebar-brand {
-  flex-direction: column;
-  padding-inline: 0.5rem;
-}
-
-:root[data-sidebar='collapsed'] .sidebar .nav-link,
-:root[data-sidebar='collapsed'] .sidebar .sidebar-new {
-  width: 2.75rem;
-  padding-inline: 0;
-  margin-inline: auto;
-}
-
-:root[data-sidebar='collapsed'] .sidebar .sidebar-theme {
-  padding: 0;
 }
 
 .when-dark {
@@ -1236,13 +1214,6 @@ dialog.modal::backdrop {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .sidebar,
-  .content-shift {
-    transition:
-      width 220ms ease,
-      margin-left 220ms ease;
-  }
-
   .btn,
   .icon-btn,
   .chip,
@@ -1396,5 +1367,213 @@ dialog.modal::backdrop {
 
   .wordmark {
     view-transition-name: none;
+  }
+}
+
+:root[data-theme='dark'] .nav-link {
+  border-radius: 0.55rem;
+  font-weight: 500;
+}
+
+:root[data-theme='dark'] .nav-link[aria-current='page'] {
+  font-weight: 500;
+}
+
+:root[data-theme='dark'] .sidebar svg,
+:root[data-theme='dark'] .drawer svg,
+:root[data-theme='dark'] .badge svg {
+  stroke-width: 1.35;
+}
+
+:root[data-theme='dark'] .brand-mark {
+  background: #323232;
+  color: #f2f2f2;
+}
+
+:root[data-theme='dark'] .sidebar-theme .icon-btn {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .sidebar-theme .icon-btn:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink);
+}
+
+:root[data-theme='dark'] .theme-label {
+  font-weight: 400;
+}
+
+:root[data-theme='dark'] .mobile-bar {
+  background: var(--canvas);
+  backdrop-filter: none;
+}
+
+:root[data-theme='dark'] .btn-primary:hover:not(:disabled) {
+  background: #d8d8d8;
+}
+
+:root[data-theme='dark'] .metric[aria-current='page'] {
+  border-color: rgb(255 255 255 / 12%);
+  background: #222222;
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .project-card:hover {
+  transform: none;
+  background: #222222;
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .control:focus-visible,
+:root[data-theme='dark'] .search:has(input:focus-visible) {
+  border-color: #8a8a8a;
+  outline: 2px solid #f2f2f2;
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .badge-idea {
+  border-color: transparent;
+  background: #2a2a2a;
+  color: #cfcfcf;
+}
+
+:root[data-theme='dark'] .badge-in_progress {
+  background: #2a3036;
+  color: #c5d0da;
+}
+
+:root[data-theme='dark'] .badge-paused {
+  background: #322f2a;
+  color: #d8d0c4;
+}
+
+:root[data-theme='dark'] .badge-done {
+  background: #28312c;
+  color: #c9d7ce;
+}
+
+:root[data-theme='dark'] .chip {
+  background: var(--surface);
+  border-color: rgb(255 255 255 / 8%);
+  color: #d4d4d4;
+}
+
+:root[data-theme='dark'] .chip[aria-pressed='true'] {
+  border-color: transparent;
+  background: #323232;
+  color: #f2f2f2;
+}
+
+:root[data-theme='dark'] dialog.drawer::backdrop,
+:root[data-theme='dark'] dialog.modal::backdrop {
+  background: rgb(0 0 0 / 58%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .nav-link {
+    border-radius: 0.55rem;
+    font-weight: 500;
+  }
+
+  :root:not([data-theme='light']) .nav-link[aria-current='page'] {
+    font-weight: 500;
+  }
+
+  :root:not([data-theme='light']) .sidebar svg,
+  :root:not([data-theme='light']) .drawer svg,
+  :root:not([data-theme='light']) .badge svg {
+    stroke-width: 1.35;
+  }
+
+  :root:not([data-theme='light']) .brand-mark {
+    background: #323232;
+    color: #f2f2f2;
+  }
+
+  :root:not([data-theme='light']) .sidebar-theme .icon-btn {
+    border-color: transparent;
+    background: transparent;
+    color: var(--muted);
+  }
+
+  :root:not([data-theme='light']) .sidebar-theme .icon-btn:hover {
+    border-color: transparent;
+    background: transparent;
+    color: var(--ink);
+  }
+
+  :root:not([data-theme='light']) .theme-label {
+    font-weight: 400;
+  }
+
+  :root:not([data-theme='light']) .mobile-bar {
+    background: var(--canvas);
+    backdrop-filter: none;
+  }
+
+  :root:not([data-theme='light']) .btn-primary:hover:not(:disabled) {
+    background: #d8d8d8;
+  }
+
+  :root:not([data-theme='light']) .metric[aria-current='page'] {
+    border-color: rgb(255 255 255 / 12%);
+    background: #222222;
+    box-shadow: none;
+  }
+
+  :root:not([data-theme='light']) .project-card:hover {
+    transform: none;
+    background: #222222;
+    box-shadow: none;
+  }
+
+  :root:not([data-theme='light']) .control:focus-visible,
+  :root:not([data-theme='light']) .search:has(input:focus-visible) {
+    border-color: #8a8a8a;
+    outline: 2px solid #f2f2f2;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+
+  :root:not([data-theme='light']) .badge-idea {
+    border-color: transparent;
+    background: #2a2a2a;
+    color: #cfcfcf;
+  }
+
+  :root:not([data-theme='light']) .badge-in_progress {
+    background: #2a3036;
+    color: #c5d0da;
+  }
+
+  :root:not([data-theme='light']) .badge-paused {
+    background: #322f2a;
+    color: #d8d0c4;
+  }
+
+  :root:not([data-theme='light']) .badge-done {
+    background: #28312c;
+    color: #c9d7ce;
+  }
+
+  :root:not([data-theme='light']) .chip {
+    background: var(--surface);
+    border-color: rgb(255 255 255 / 8%);
+    color: #d4d4d4;
+  }
+
+  :root:not([data-theme='light']) .chip[aria-pressed='true'] {
+    border-color: transparent;
+    background: #323232;
+    color: #f2f2f2;
+  }
+
+  :root:not([data-theme='light']) dialog.drawer::backdrop,
+  :root:not([data-theme='light']) dialog.modal::backdrop {
+    background: rgb(0 0 0 / 58%);
   }
 }
