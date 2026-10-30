@@ -4,6 +4,7 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
 
@@ -25,6 +26,8 @@ function isApiErrorBody(value: unknown): value is ApiErrorBody {
 
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(ApiExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
 
@@ -32,6 +35,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
       const status = exception.getStatus();
       const body = exception.getResponse();
       if (isApiErrorBody(body)) {
+        this.logIfServerError(status, exception);
         response.status(status).json(body);
         return;
       }
@@ -57,11 +61,26 @@ export class ApiExceptionFilter implements ExceptionFilter {
       }
     }
 
+    this.logServerError(exception);
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       error: {
         code: 'INTERNAL_ERROR',
         message: 'Erro interno.',
       },
     });
+  }
+
+  private logIfServerError(status: number, exception: unknown): void {
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      this.logServerError(exception);
+    }
+  }
+
+  private logServerError(exception: unknown): void {
+    if (exception instanceof Error) {
+      this.logger.error(exception.message, exception.stack);
+      return;
+    }
+    this.logger.error('Erro interno.');
   }
 }
