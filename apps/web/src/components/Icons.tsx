@@ -83,6 +83,22 @@ export function IconClose() {
   );
 }
 
+export function IconChevronsLeft() {
+  return (
+    <Stroke>
+      <path d="M11 17 6 12l5-5M18 17l-5-5 5-5" />
+    </Stroke>
+  );
+}
+
+export function IconChevronsRight() {
+  return (
+    <Stroke>
+      <path d="m13 17 5-5-5-5M6 17l5-5-5-5" />
+    </Stroke>
+  );
+}
+
 export function IconPlus() {
   return (
     <Stroke>

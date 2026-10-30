@@ -68,6 +68,10 @@
   --nav-count: var(--accent);
 }
 
+:root[data-sidebar='collapsed'] {
+  --sidebar-w: 4.75rem;
+}
+
 :root[data-theme='dark'] {
   color-scheme: dark;
   --canvas: #141414;
@@ -329,6 +333,50 @@ body {
   height: 1.1rem;
 }
 
+.sidebar-collapse {
+  padding: 0 0.75rem 0.15rem;
+}
+
+.collapse-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  border: 0;
+  border-radius: 0.55rem;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 400;
+  line-height: 1;
+  text-align: left;
+  cursor: pointer;
+}
+
+.collapse-btn svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+}
+
+.collapse-icon-right {
+  display: none;
+}
+
+.collapse-btn:hover {
+  background: var(--nav-hover);
+  color: var(--ink);
+}
+
+.collapse-label {
+  white-space: nowrap;
+}
+
 dialog.drawer {
   position: fixed;
   inset: 0 auto 0 0;
@@ -379,6 +427,43 @@ dialog.drawer[open] {
   .shell {
     width: min(76rem, calc(100% - 3.5rem));
   }
+}
+
+:root[data-sidebar='collapsed'] .sidebar .brand-name,
+:root[data-sidebar='collapsed'] .sidebar .nav-label,
+:root[data-sidebar='collapsed'] .sidebar .nav-count,
+:root[data-sidebar='collapsed'] .sidebar .theme-label,
+:root[data-sidebar='collapsed'] .sidebar .btn-label,
+:root[data-sidebar='collapsed'] .sidebar .collapse-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+:root[data-sidebar='collapsed'] .sidebar .sidebar-brand,
+:root[data-sidebar='collapsed'] .sidebar .nav-link,
+:root[data-sidebar='collapsed'] .sidebar .sidebar-theme,
+:root[data-sidebar='collapsed'] .sidebar .collapse-btn {
+  justify-content: center;
+}
+
+:root[data-sidebar='collapsed'] .sidebar .nav-link,
+:root[data-sidebar='collapsed'] .sidebar .sidebar-new,
+:root[data-sidebar='collapsed'] .sidebar .collapse-btn {
+  width: 2.75rem;
+  margin-inline: auto;
+  padding-inline: 0;
+}
+
+:root[data-sidebar='collapsed'] .sidebar .collapse-icon-left {
+  display: none;
+}
+
+:root[data-sidebar='collapsed'] .sidebar .collapse-icon-right {
+  display: inline-flex;
 }
 
 .when-dark {
@@ -1214,6 +1299,13 @@ dialog.modal::backdrop {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .sidebar,
+  .content-shift {
+    transition:
+      width 220ms ease,
+      margin-left 220ms ease;
+  }
+
   .btn,
   .icon-btn,
   .chip,
