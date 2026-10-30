@@ -83,15 +83,6 @@ export function IconClose() {
   );
 }
 
-export function IconPanel() {
-  return (
-    <Stroke>
-      <rect x="4.5" y="4.5" width="15" height="15" rx="2" />
-      <path d="M9.5 4.5v15" />
-    </Stroke>
-  );
-}
-
 export function IconPlus() {
   return (
     <Stroke>
